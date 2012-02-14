@@ -1,0 +1,5 @@
+.deps
+.libs
+mod_log_fluentd.la
+mod_log_fluentd.lo
+mod_log_fluentd.slo
