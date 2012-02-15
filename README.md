@@ -2,6 +2,7 @@
 
 ## EXPERIMENTAL
 
+currently, this module only output [debug.test,fixed_time,{hello:world}] to localhost fluentd.
 
 ## Install
 
