@@ -16,6 +16,20 @@ also you need to install msgpack for C and libuv. please specify -fPIC flag when
 So many!
 
 
+## Configurations (draft)
+
+````
+CustomLog fluentd:<default_tag>@<host>[:port] "format"
+````
+
+for example:
+
+````
+CustomLog fluentd:debug.test@localhost:24224 "%u"
+````
+
+this feature hasn't implement yet.
+
 ## variable names (draft)
 
 ````
