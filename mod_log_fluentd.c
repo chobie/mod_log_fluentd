@@ -74,7 +74,7 @@ typedef struct {
 
 module AP_MODULE_DECLARE_DATA log_fluentd_module;
 
-
+static pthread_t thread;
 static apr_hash_t *fluentd_hash;
 
 static ap_log_writer_init *normal_log_writer_init = NULL;
@@ -83,7 +83,6 @@ static ap_log_writer *normal_log_writer = NULL;
 
 static void write_cb(uv_write_t *req, int status)
 {
-        fprintf(stderr,"write");
         free(req);
 }
 
@@ -110,8 +109,8 @@ static int log_fluentd_post(fluentd_t *fluentd, const char *message, unsigned in
 	buf = uv_buf_init(sbuf.data, sbuf.size);
 	req = (uv_write_t *)malloc(sizeof(*req));
 	uv_write(req, (uv_stream_t*)&fluentd->socket, &buf, 1, write_cb);
-	msgpack_sbuffer_destroy(&sbuf);
 
+	msgpack_sbuffer_destroy(&sbuf);
 }
 
 static void fluentd_connect_cb(uv_connect_t *conn_req, int status)
@@ -144,7 +143,6 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 	int error = 0;
 
 	if (!(log = apr_hash_get(fluentd_hash, name, APR_HASH_KEY_STRING))) {
-		pthread_t thread;
 		log = apr_palloc(p, sizeof(fluentd_log));
 		fluentd = apr_palloc(p, sizeof(fluentd_t));
 		
@@ -222,7 +220,8 @@ static apr_status_t log_fluentd_child_exit(void *data)
 		apr_hash_this(index, NULL, NULL, (void*) &log);
 	}
 
-	ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, p, "Hello World");	
+	pthread_cancel(thread);
+	ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, p, "Child Exit");	
 	return OK;
 }
 
