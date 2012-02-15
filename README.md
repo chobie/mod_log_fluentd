@@ -14,3 +14,38 @@ also you need to install msgpack for C and libuv. please specify -fPIC flag when
 ## Todo
 
 So many!
+
+
+## variable names (draft)
+
+````
+remote_addr: %a
+server_addr: %A
+response_size: %B
+cookies.FooBar: %{FooBar}C
+processing_time: %d
+file_name: %f
+remote_host: %h
+request_protocol: %H
+headers.FooBar: %{FooBar}e
+ident_name: %l
+request_method: %m
+memo.FooBar: %{FooBar}n
+response.FooBar: %{FooBar}o
+server_port: %p
+process_id: %P
+worker_id: %{format}P
+query_string: %q
+first_line: %r
+status: %s
+request_time: %t
+formated_time: %{format}t
+processing_time: %T
+remote_user: %u
+path: %U
+server_name: %v
+canonical_name: %V
+response_status: %X
+recived_size: %I (mod_logio)
+send_size: %O (mod_logio)
+````
