@@ -170,7 +170,8 @@ static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char 
 	if (log->write_local == 1 && log->normal_handle) {
 		result = normal_log_writer(r, log->normal_handle, strs, strl, nelts, len);
 	} else {
-		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "post");
+		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "fluent-logger");
+		/* currentry, message will be ignored. */
 		log_fluentd_post(log->fluentd,"[\"debug.test\",1329275765,{\"hello\":\"world\"}]",43);
 	}
 
