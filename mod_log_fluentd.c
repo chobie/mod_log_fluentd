@@ -55,6 +55,7 @@
 #include "uv.h"
 
 #include "pthread.h"
+#include "msgpack.h"
 
 typedef struct {
 	char *host;
@@ -90,10 +91,27 @@ static int log_fluentd_post(fluentd_t *fluentd, const char *message, unsigned in
 {
 	uv_write_t *req;
 	uv_buf_t buf;
+	msgpack_sbuffer sbuf;
+	msgpack_packer pk;
 
-	buf = uv_buf_init(message, message_len);
+	msgpack_sbuffer_init(&sbuf);
+	msgpack_packer_init(&pk, &sbuf, msgpack_sbuffer_write);
+
+	msgpack_pack_array(&pk, 3);
+	msgpack_pack_raw(&pk,10);
+	msgpack_pack_raw_body(&pk, "debug.test", 10);
+	msgpack_pack_int(&pk, 1329275765);
+	msgpack_pack_map(&pk, 1);
+	msgpack_pack_raw(&pk, 5);
+	msgpack_pack_raw_body(&pk, "hello",5);
+	msgpack_pack_raw(&pk, 5);
+	msgpack_pack_raw_body(&pk,"world",5);
+
+	buf = uv_buf_init(sbuf.data, sbuf.size);
 	req = (uv_write_t *)malloc(sizeof(*req));
 	uv_write(req, (uv_stream_t*)&fluentd->socket, &buf, 1, write_cb);
+	msgpack_sbuffer_destroy(&sbuf);
+
 }
 
 static void fluentd_connect_cb(uv_connect_t *conn_req, int status)
