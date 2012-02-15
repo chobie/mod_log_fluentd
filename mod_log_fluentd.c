@@ -141,18 +141,28 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 	fluentd_t *fluentd;
 	fluentd_log *log;
 	int error = 0;
+	int fluentdWriter = 1;
+
+	ap_log_error(APLOG_MARK,APLOG_ERR, 0, s, name);
+	if (name != NULL && strstr(name, "fluentd") == NULL) {
+		fluentdWriter = 0;
+	}
 
 	if (!(log = apr_hash_get(fluentd_hash, name, APR_HASH_KEY_STRING))) {
 		log = apr_palloc(p, sizeof(fluentd_log));
-		fluentd = apr_palloc(p, sizeof(fluentd_t));
 		
-		error = fluentd_open(fluentd, "127.0.0.1", 24224);
-		
-		log->fluentd = fluentd;
-		log->write_local = 0;
-		log->normal_handle = NULL;
-		//log->normal_handle = normal_log_writer_init(p, s, name);
-		pthread_create(&thread,NULL,run_fluentd,NULL);
+		if (fluentdWriter == 1) {
+			fluentd = apr_palloc(p, sizeof(fluentd_t));
+			error = fluentd_open(fluentd, "127.0.0.1", 24224);
+
+			log->fluentd = fluentd;
+			log->write_local = 0;
+			log->normal_handle = NULL;
+			pthread_create(&thread,NULL,run_fluentd,NULL);
+		} else {
+			log->write_local = 1;
+			//log->normal_handle = normal_log_writer_init(p, s, name);
+		}
 
 		apr_hash_set(fluentd_hash, name, APR_HASH_KEY_STRING, log);
 	}
