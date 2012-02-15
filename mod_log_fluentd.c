@@ -54,9 +54,14 @@
 #include "mod_log_config.h"
 #include "uv.h"
 
+#include "pthread.h"
+
 typedef struct {
 	char *host;
 	unsigned int port;
+	struct sockaddr_in server_addr;
+	uv_tcp_t socket;
+	uv_connect_t connect;
 	int retry_count;
 } fluentd_t;
 
@@ -74,11 +79,40 @@ static apr_hash_t *fluentd_hash;
 static ap_log_writer_init *normal_log_writer_init = NULL;
 static ap_log_writer *normal_log_writer = NULL;
 
+
+static void write_cb(uv_write_t *req, int status)
+{
+        fprintf(stderr,"write");
+        free(req);
+}
+
+static int log_fluentd_post(fluentd_t *fluentd, const char *message, unsigned int message_len)
+{
+	uv_write_t *req;
+	uv_buf_t buf;
+
+	buf = uv_buf_init(message, message_len);
+	req = (uv_write_t *)malloc(sizeof(*req));
+	uv_write(req, (uv_stream_t*)&fluentd->socket, &buf, 1, write_cb);
+}
+
+static void fluentd_connect_cb(uv_connect_t *conn_req, int status)
+{
+}
+
+static void run_fluentd()
+{
+	uv_run(uv_default_loop());
+}
+
 /* begin fluentd implementation */
 int fluentd_open(fluentd_t *p, const char *host, const int port)
 {
 	p->host = strdup(host);
 	p->port = port;
+	p->server_addr = uv_ip4_addr(p->host, p->port);
+	uv_tcp_init(uv_default_loop(), &p->socket);
+	uv_tcp_connect(&p->connect, &p->socket, p->server_addr, fluentd_connect_cb);
 
 	return 0;
 }
@@ -92,15 +126,18 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 	int error = 0;
 
 	if (!(log = apr_hash_get(fluentd_hash, name, APR_HASH_KEY_STRING))) {
+		pthread_t thread;
 		log = apr_palloc(p, sizeof(fluentd_log));
 		fluentd = apr_palloc(p, sizeof(fluentd_t));
 		
-		error = fluentd_open(fluentd, "localhost", 22424);
+		error = fluentd_open(fluentd, "127.0.0.1", 24224);
 		
 		log->fluentd = fluentd;
 		log->write_local = 0;
 		log->normal_handle = NULL;
 		//log->normal_handle = normal_log_writer_init(p, s, name);
+		pthread_create(&thread,NULL,run_fluentd,NULL);
+
 		apr_hash_set(fluentd_hash, name, APR_HASH_KEY_STRING, log);
 	}
 
@@ -114,8 +151,11 @@ static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char 
 	apr_status_t result;
 
 	ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "Hello mod_log_fluentd");
-	if (log->write_local && log->normal_handle) {
+	if (log->write_local == 1 && log->normal_handle) {
 		result = normal_log_writer(r, log->normal_handle, strs, strl, nelts, len);
+	} else {
+		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "post");
+		log_fluentd_post(log->fluentd,"[\"debug.test\",1329275765,{\"hello\":\"world\"}]",43);
 	}
 
 	return OK;
