@@ -52,8 +52,17 @@
 #include "apr_reslist.h"
 
 #include "mod_log_config.h"
+#include "uv.h"
 
 typedef struct {
+	char *host;
+	unsigned int port;
+	int retry_count;
+} fluentd_t;
+
+typedef struct {
+	fluentd_t *fluentd;
+	int write_local;
 	void *normal_handle; /* apache mod_log_config handle */
 } fluentd_log;
 
@@ -65,16 +74,33 @@ static apr_hash_t *fluentd_hash;
 static ap_log_writer_init *normal_log_writer_init = NULL;
 static ap_log_writer *normal_log_writer = NULL;
 
+/* begin fluentd implementation */
+int fluentd_open(fluentd_t *p, const char *host, const int port)
+{
+	p->host = strdup(host);
+	p->port = port;
+
+	return 0;
+}
+
+/* end fluentd implementation */
+
 static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *name)
 {
+	fluentd_t *fluentd;
 	fluentd_log *log;
+	int error = 0;
 
 	if (!(log = apr_hash_get(fluentd_hash, name, APR_HASH_KEY_STRING))) {
 		log = apr_palloc(p, sizeof(fluentd_log));
-
-		// god, this does not work!
-		// log->normal_handle = normal_log_writer_init(p, s, name);
+		fluentd = apr_palloc(p, sizeof(fluentd_t));
+		
+		error = fluentd_open(fluentd, "localhost", 22424);
+		
+		log->fluentd = fluentd;
+		log->write_local = 0;
 		log->normal_handle = NULL;
+		//log->normal_handle = normal_log_writer_init(p, s, name);
 		apr_hash_set(fluentd_hash, name, APR_HASH_KEY_STRING, log);
 	}
 
@@ -88,7 +114,7 @@ static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char 
 	apr_status_t result;
 
 	ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "Hello mod_log_fluentd");
-	if (log->normal_handle) {
+	if (log->write_local && log->normal_handle) {
 		result = normal_log_writer(r, log->normal_handle, strs, strl, nelts, len);
 	}
 
@@ -105,10 +131,17 @@ static int log_fluentd_pre_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *p
 
 	if (log_set_writer_init_fn && log_set_writer_fn) {
 		if (!normal_log_writer_init) {
+			void *f;
 			module *mod_log_config = ap_find_linked_module("mod_log_config.c");
 
-			normal_log_writer_init = log_set_writer_init_fn(log_fluentd_writer_init);
-			normal_log_writer = log_set_writer_fn(log_fluentd_writer);
+			f = log_set_writer_init_fn(log_fluentd_writer_init);
+			if (f != log_fluentd_writer_init) {
+				normal_log_writer_init = f;
+			}
+			f = log_set_writer_fn(log_fluentd_writer);
+			if (f != log_fluentd_writer) {
+				normal_log_writer = f;
+			}
 		}
 	}
 	return OK;
