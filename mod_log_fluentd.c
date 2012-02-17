@@ -50,12 +50,15 @@
 #include "apr_hooks.h"
 #include "apr_optional.h"
 #include "apr_reslist.h"
+#include "apr_tables.h"
 
 #include "mod_log_config.h"
 #include "uv.h"
 
 #include "pthread.h"
 #include "msgpack.h"
+
+#include <stddef.h>
 
 typedef struct {
 	char *host;
@@ -143,7 +146,6 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 	int error = 0;
 	int fluentdWriter = 1;
 
-	ap_log_error(APLOG_MARK,APLOG_ERR, 0, s, name);
 	if (name != NULL && strstr(name, "fluentd") == NULL) {
 		fluentdWriter = 0;
 	}
@@ -158,7 +160,7 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 			log->fluentd = fluentd;
 			log->write_local = 0;
 			log->normal_handle = NULL;
-			pthread_create(&thread,NULL,run_fluentd,NULL);
+			//pthread_create(&thread,NULL, (void*)run_fluentd,NULL);
 		} else {
 			log->write_local = 1;
 			//log->normal_handle = normal_log_writer_init(p, s, name);
@@ -170,23 +172,37 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 	return log;
 }
 
+typedef struct {
+    const char *fname;
+    const char *format_string;
+    apr_array_header_t *format;//16	
+    void *log_writer;//24
+    char *condition_var;
+} config_log_state;
+
+#define container_of(ptr, type, member) ({          \
+	const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
+	(type *)( (char *)__mptr - offsetof(type,member) );})
 
 static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char **strs, int *strl, int nelts, apr_size_t len)
 {
+	config_log_state *state = container_of(&handle, config_log_state, log_writer);
 	fluentd_log *log = (fluentd_log *)handle;
 	apr_status_t result;
 
-	ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "Hello mod_log_fluentd");
 	if (log->write_local == 1 && log->normal_handle) {
 		result = normal_log_writer(r, log->normal_handle, strs, strl, nelts, len);
 	} else {
 		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "fluent-logger");
+		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "offset: %d",offsetof(config_log_state,log_writer));
+		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "snelts:%d, %d, %d, %d, %d", (char *)handle, log, state, state->format->nelts, nelts);
 		/* currentry, message will be ignored. */
 		log_fluentd_post(log->fluentd,"[\"debug.test\",1329275765,{\"hello\":\"world\"}]",43);
 	}
 
 	return OK;
 }
+
 
 static int log_fluentd_pre_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *ptemp)
 {
@@ -198,26 +214,12 @@ static int log_fluentd_pre_config(apr_pool_t *p, apr_pool_t *plog, apr_pool_t *p
 
 	if (log_set_writer_init_fn && log_set_writer_fn) {
 		if (!normal_log_writer_init) {
-			void *f;
 			module *mod_log_config = ap_find_linked_module("mod_log_config.c");
 
-			f = log_set_writer_init_fn(log_fluentd_writer_init);
-			if (f != log_fluentd_writer_init) {
-				normal_log_writer_init = f;
-			}
-			f = log_set_writer_fn(log_fluentd_writer);
-			if (f != log_fluentd_writer) {
-				normal_log_writer = f;
-			}
+			normal_log_writer_init = log_set_writer_init_fn(log_fluentd_writer_init);
+			normal_log_writer = log_set_writer_fn(log_fluentd_writer);
 		}
 	}
-	return OK;
-}
-
-static int log_fluentd_transaction(request_rec *r)
-{
-	/* for testing */
-	ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "Hello Chobie");
 	return OK;
 }
 
@@ -232,7 +234,11 @@ static apr_status_t log_fluentd_child_exit(void *data)
 	}
 
 	pthread_cancel(thread);
-	ap_log_perror(APLOG_MARK, APLOG_DEBUG, 0, p, "Child Exit");	
+	return OK;
+}
+
+static int log_fluentd_transaction(request_rec *r)
+{
 	return OK;
 }
 
@@ -253,12 +259,12 @@ static void log_fluentd_register_hooks(apr_pool_t *p)
 
 /* Dispatch list for API hooks */
 module AP_MODULE_DECLARE_DATA log_fluentd_module = {
-    STANDARD20_MODULE_STUFF, 
-    NULL,                  /* create per-dir    config structures */
-    NULL,                  /* merge  per-dir    config structures */
-    NULL,                  /* create per-server config structures */
-    NULL,                  /* merge  per-server config structures */
-    NULL,                  /* table of config file commands       */
-    log_fluentd_register_hooks  /* register hooks                      */
+	STANDARD20_MODULE_STUFF, 
+	NULL,                  /* create per-dir    config structures */
+	NULL,                  /* merge  per-dir    config structures */
+	NULL,                  /* create per-server config structures */
+	NULL,                  /* merge  per-server config structures */
+	NULL,                  /* table of config file commands       */
+	log_fluentd_register_hooks  /* register hooks                      */
 };
 
