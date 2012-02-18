@@ -181,7 +181,7 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 			pthread_create(&thread,NULL, (void*)run_fluentd,NULL);
 		} else {
 			log->write_local = 1;
-			//log->normal_handle = normal_log_writer_init(p, s, name);
+			log->normal_handle = normal_log_writer_init(p, s, name);
 		}
 
 		apr_hash_set(fluentd_hash, name, APR_HASH_KEY_STRING, log);
