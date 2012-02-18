@@ -71,6 +71,7 @@ typedef struct {
 
 typedef struct {
 	fluentd_t *fluentd;
+	char *uri;
 	char *host;
 	unsigned int port;
 	char *tag;
@@ -90,17 +91,23 @@ static ap_log_writer *normal_log_writer = NULL;
 
 static void write_cb(uv_write_t *req, int status)
 {
-        free(req);
+	fluentd_log *log = (fluentd_log*)req->data;
+
+	if (status != 0) {
+		//fluentd_open(log->fluentd, log->host, log->port);
+	}
+	free(req);
 }
 
-int log_fluentd_post(fluentd_t *fluentd, msgpack_sbuffer *sbuf)
+int log_fluentd_post(fluentd_log *log, msgpack_sbuffer *sbuf)
 {
 	uv_write_t *req;
 	uv_buf_t buf;
 
 	buf = uv_buf_init(sbuf->data, sbuf->size);
 	req = (uv_write_t *)malloc(sizeof(*req));
-	uv_write(req, (uv_stream_t*)&fluentd->socket, &buf, 1, write_cb);
+	req->data = log;
+	uv_write(req, (uv_stream_t*)&log->fluentd->socket, &buf, 1, write_cb);
 }
 
 static void fluentd_connect_cb(uv_connect_t *conn_req, int status)
@@ -175,6 +182,7 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 			
 			error = fluentd_open(fluentd, log->host, log->port);
 
+			log->uri = uri;
 			log->fluentd = fluentd;
 			log->write_local = 0;
 			log->normal_handle = NULL;
@@ -217,7 +225,7 @@ static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char 
 			msgpack_pack_raw_body(&pk, strs[i], strl[i]);
 		}
 
-		log_fluentd_post(log->fluentd,&sbuf);
+		log_fluentd_post(log,&sbuf);
 		msgpack_sbuffer_destroy(&sbuf);
 	}
 
