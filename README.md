@@ -4,6 +4,11 @@
 
 DO NOT USE ANY PRODUCTION OR STAGING ENVIRONMENT. THIS MODULE MUST BE CRUSH.
 
+## Dependencies
+
+msgpack (c)
+libuv
+
 ## Install
 
 ````
