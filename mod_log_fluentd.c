@@ -179,7 +179,6 @@ static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char 
 		msgpack_pack_int(&pk, 1329275765);
 		msgpack_pack_array(&pk,nelts);
 		for (i = 0; i < nelts; i++) {
-			ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "str:%s",strs[i]);
 			msgpack_pack_raw(&pk,strl[i]);
 			msgpack_pack_raw_body(&pk, strs[i], strl[i]);
 		}
