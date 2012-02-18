@@ -2,8 +2,6 @@
 
 ## EXPERIMENTAL
 
-currently, this module only output [debug.test,fixed_time,{hello:world}] to localhost fluentd.
-
 ## Install
 
 ````
@@ -17,6 +15,14 @@ also you need to install msgpack for C and libuv. please specify -fPIC flag when
 So many!
 
 
+## Outputs
+
+this module provides direct logging to fluentd.
+
+````
+2012-02-15 03:16:05 +0000 debug.test: ["127.0.0.1"," ","-"," ","-"," ","[18/Feb/2012:02:27:42 +0000]"," \"","GET / HTTP/1.1","\" ","200"," ","44"," \"","-","\" \"","curl/7.21.3 (x86_64-pc-linux-gnu) libcurl/7.21.3 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18","\"","\n"]
+````
+
 ## Configurations (draft)
 
 ````
@@ -29,9 +35,12 @@ for example:
 CustomLog fluentd:debug.test@localhost:24224 "%u"
 ````
 
-this feature hasn't implement yet.
+this feature hasn't implement yet. (always connect to 127.0.0.1:24224 and use debug.test tag)
 
 ## variable names (draft)
+
+it's very useful to identify log value. currently, it does not support ;(
+this feature requires fully implement own logger for apache2. mod_log_fluentd uses mod_log_config's writer dispatch mechanism.
 
 ````
 remote_addr: %a

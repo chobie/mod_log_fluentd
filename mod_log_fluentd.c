@@ -89,31 +89,14 @@ static void write_cb(uv_write_t *req, int status)
         free(req);
 }
 
-static int log_fluentd_post(fluentd_t *fluentd, const char *message, unsigned int message_len)
+int log_fluentd_post(fluentd_t *fluentd, msgpack_sbuffer *sbuf)
 {
 	uv_write_t *req;
 	uv_buf_t buf;
-	msgpack_sbuffer sbuf;
-	msgpack_packer pk;
 
-	msgpack_sbuffer_init(&sbuf);
-	msgpack_packer_init(&pk, &sbuf, msgpack_sbuffer_write);
-
-	msgpack_pack_array(&pk, 3);
-	msgpack_pack_raw(&pk,10);
-	msgpack_pack_raw_body(&pk, "debug.test", 10);
-	msgpack_pack_int(&pk, 1329275765);
-	msgpack_pack_map(&pk, 1);
-	msgpack_pack_raw(&pk, 5);
-	msgpack_pack_raw_body(&pk, "hello",5);
-	msgpack_pack_raw(&pk, 5);
-	msgpack_pack_raw_body(&pk,"world",5);
-
-	buf = uv_buf_init(sbuf.data, sbuf.size);
+	buf = uv_buf_init(sbuf->data, sbuf->size);
 	req = (uv_write_t *)malloc(sizeof(*req));
 	uv_write(req, (uv_stream_t*)&fluentd->socket, &buf, 1, write_cb);
-
-	msgpack_sbuffer_destroy(&sbuf);
 }
 
 static void fluentd_connect_cb(uv_connect_t *conn_req, int status)
@@ -131,6 +114,7 @@ int fluentd_open(fluentd_t *p, const char *host, const int port)
 	p->host = strdup(host);
 	p->port = port;
 	p->server_addr = uv_ip4_addr(p->host, p->port);
+
 	uv_tcp_init(uv_default_loop(), &p->socket);
 	uv_tcp_connect(&p->connect, &p->socket, p->server_addr, fluentd_connect_cb);
 
@@ -160,7 +144,7 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 			log->fluentd = fluentd;
 			log->write_local = 0;
 			log->normal_handle = NULL;
-			//pthread_create(&thread,NULL, (void*)run_fluentd,NULL);
+			pthread_create(&thread,NULL, (void*)run_fluentd,NULL);
 		} else {
 			log->write_local = 1;
 			//log->normal_handle = normal_log_writer_init(p, s, name);
@@ -172,32 +156,36 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 	return log;
 }
 
-typedef struct {
-    const char *fname;
-    const char *format_string;
-    apr_array_header_t *format;//16	
-    void *log_writer;//24
-    char *condition_var;
-} config_log_state;
-
-#define container_of(ptr, type, member) ({          \
-	const typeof( ((type *)0)->member ) *__mptr = (ptr);    \
-	(type *)( (char *)__mptr - offsetof(type,member) );})
-
 static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char **strs, int *strl, int nelts, apr_size_t len)
 {
-	config_log_state *state = container_of(&handle, config_log_state, log_writer);
 	fluentd_log *log = (fluentd_log *)handle;
 	apr_status_t result;
 
-	if (log->write_local == 1 && log->normal_handle) {
-		result = normal_log_writer(r, log->normal_handle, strs, strl, nelts, len);
+	if (log->write_local == 1) {
+		if (log->normal_handle) {
+			result = normal_log_writer(r, log->normal_handle, strs, strl, nelts, len);
+		}
 	} else {
-		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "fluent-logger");
-		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "offset: %d",offsetof(config_log_state,log_writer));
-		ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "snelts:%d, %d, %d, %d, %d", (char *)handle, log, state, state->format->nelts, nelts);
-		/* currentry, message will be ignored. */
-		log_fluentd_post(log->fluentd,"[\"debug.test\",1329275765,{\"hello\":\"world\"}]",43);
+		int i =0;
+		char *str;
+		msgpack_sbuffer sbuf;
+		msgpack_packer pk;
+		msgpack_sbuffer_init(&sbuf);
+		msgpack_packer_init(&pk, &sbuf, msgpack_sbuffer_write);
+
+		msgpack_pack_array(&pk, 3);
+		msgpack_pack_raw(&pk,10);
+		msgpack_pack_raw_body(&pk, "debug.test", 10);
+		msgpack_pack_int(&pk, 1329275765);
+		msgpack_pack_array(&pk,nelts);
+		for (i = 0; i < nelts; i++) {
+			ap_log_rerror(APLOG_MARK,APLOG_ERR, 0, r, "str:%s",strs[i]);
+			msgpack_pack_raw(&pk,strl[i]);
+			msgpack_pack_raw_body(&pk, strs[i], strl[i]);
+		}
+
+		log_fluentd_post(log->fluentd,&sbuf);
+		msgpack_sbuffer_destroy(&sbuf);
 	}
 
 	return OK;
