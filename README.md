@@ -1,5 +1,7 @@
 # the logger for Apache2.
 
+this modules highly inspired emaland/mod_log_scribe.
+
 ## EXPERIMENTAL
 
 DO NOT USE ANY PRODUCTION OR STAGING ENVIRONMENT. THIS MODULE MUST BE CRUSH.
@@ -30,7 +32,7 @@ this module provides direct logging to fluentd.
 2012-02-15 03:16:05 +0000 debug.test: ["127.0.0.1"," ","-"," ","-"," ","[18/Feb/2012:02:27:42 +0000]"," \"","GET / HTTP/1.1","\" ","200"," ","44"," \"","-","\" \"","curl/7.21.3 (x86_64-pc-linux-gnu) libcurl/7.21.3 OpenSSL/0.9.8o zlib/1.2.3.4 libidn/1.18","\"","\n"]
 ````
 
-## Configurations (draft)
+## Configurations
 
 ````
 CustomLog fluentd:<default_tag>@<host>[:port] "format"
@@ -39,10 +41,10 @@ CustomLog fluentd:<default_tag>@<host>[:port] "format"
 for example:
 
 ````
-CustomLog fluentd:debug.test@localhost:24224 "%u"
+CustomLog fluentd:debug.test@127.0.01:24224 "%u"
 ````
 
-this feature hasn't implement yet. (always connect to 127.0.0.1:24224 and use debug.test tag)
+host expects ip address.
 
 ## variable names (draft)
 

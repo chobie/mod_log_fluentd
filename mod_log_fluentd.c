@@ -71,6 +71,10 @@ typedef struct {
 
 typedef struct {
 	fluentd_t *fluentd;
+	char *host;
+	unsigned int port;
+	char *tag;
+	int tag_len;
 	int write_local;
 	void *normal_handle; /* apache mod_log_config handle */
 } fluentd_log;
@@ -138,8 +142,38 @@ static void* log_fluentd_writer_init(apr_pool_t *p, server_rec *s, const char *n
 		log = apr_palloc(p, sizeof(fluentd_log));
 		
 		if (fluentdWriter == 1) {
+			char *uri = NULL;
+			char *c = NULL;
+			
+			
+			uri = apr_pstrdup(p,name);
 			fluentd = apr_palloc(p, sizeof(fluentd_t));
-			error = fluentd_open(fluentd, "127.0.0.1", 24224);
+			log->host = "127.0.0.1";
+			log->port = 24224;
+			log->tag = "debug.test";
+			log->tag_len = strlen(log->tag);
+			c = ap_strrchr(uri, ':');
+			if (c != NULL) {
+				if (c != uri+6) {
+					log->port = apr_atoi64(c+1);
+					*c = '\0';
+				}
+			}
+			
+			c = ap_strrchr(uri, '@');
+			if (c != NULL) {
+				*c++ = '\0';
+				log->host = c;
+			}
+			
+			c = ap_strrchr(uri, ':');
+			if (c != NULL) {
+				*c++ = '\0';
+				log->tag = c;
+				log->tag_len = strlen(log->tag);
+			}
+			
+			error = fluentd_open(fluentd, log->host, log->port);
 
 			log->fluentd = fluentd;
 			log->write_local = 0;
@@ -174,8 +208,8 @@ static apr_status_t log_fluentd_writer(request_rec *r, void *handle, const char 
 		msgpack_packer_init(&pk, &sbuf, msgpack_sbuffer_write);
 
 		msgpack_pack_array(&pk, 3);
-		msgpack_pack_raw(&pk,10);
-		msgpack_pack_raw_body(&pk, "debug.test", 10);
+		msgpack_pack_raw(&pk,log->tag_len);
+		msgpack_pack_raw_body(&pk, log->tag, log->tag_len);
 		msgpack_pack_int(&pk, 1329275765);
 		msgpack_pack_array(&pk,nelts);
 		for (i = 0; i < nelts; i++) {
